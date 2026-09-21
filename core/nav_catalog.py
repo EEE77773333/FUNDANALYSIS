@@ -88,12 +88,82 @@ NAV_GROUPS: List[Tuple[str, List[NavItem]]] = [
 # 文件名 → group（页头强制使用）
 PAGE_GROUP_MAP: Dict[str, str] = {}
 PAGE_TITLE_MAP: Dict[str, str] = {}
+_PAGE_SECTION_MAP: Dict[str, str] = {}
 for _sec, items in NAV_GROUPS:
     for path, title, _icon, group in items:
         key = path.replace("\\", "/").split("/")[-1]
         PAGE_GROUP_MAP[key] = group
         PAGE_TITLE_MAP[key] = title
         PAGE_GROUP_MAP[path] = group
+        _PAGE_SECTION_MAP[key] = _sec
+        _PAGE_SECTION_MAP[path] = _sec
+
+
+# ============================================================
+# 套餐权限门槛（托管版 EDITION=cloud 生效）
+# ============================================================
+#
+# 菜单在侧栏始终「显性保留」，未订阅用户也能看见；
+# 点击进入后由 core.middleware.require_feature_access 渲染「请进行订阅」引导页。
+#
+# 档位由低到高：free(免费版) < plus(个人版) < pro(专业版) < enterprise(企业版)
+# 调整门槛只需改这张表。
+
+GROUP_REQUIRED_TIER: Dict[str, str] = {
+    "深度分析": "pro",        # FAMAS 深度分析 / 新闻情绪 / Brinson 归因
+    "持仓组合": "pro",        # 我的组合 / 组合诊断 / 资产配置 / 持仓漂移 / 赛道再平衡
+    "监控预警": "enterprise",  # 持续监控 / 预警规则 / 信号跟踪 / 通知配置
+}
+
+TIER_RANK: Dict[str, int] = {
+    "free": 0,
+    "plus": 1,
+    "pro": 2,
+    "enterprise": 3,
+}
+
+
+def tier_rank(tier: Optional[str]) -> int:
+    """档位 → 数字等级（未知档位按 free 处理）。"""
+    return TIER_RANK.get((tier or "free").strip().lower(), 0)
+
+
+def tier_meets(user_tier: Optional[str], required_tier: Optional[str]) -> bool:
+    """用户档位是否达到要求。required 为空表示不限制。"""
+    if not required_tier:
+        return True
+    return tier_rank(user_tier) >= tier_rank(required_tier)
+
+
+def required_tier_for(page_or_group: str) -> Optional[str]:
+    """查询某页面/分组所需的订阅档位；无需订阅返回 None。
+
+    参数可以是中文栏目名（"持仓组合"）、文件名（"19_组合管理.py"）
+    或完整路径（"pages/19_组合管理.py"）。
+    """
+    if not page_or_group:
+        return None
+    key = str(page_or_group).replace("\\", "/")
+    # 1) 直接是栏目名
+    if key in GROUP_REQUIRED_TIER:
+        return GROUP_REQUIRED_TIER[key]
+    # 2) 页面路径/文件名 → 中文栏目 → 门槛
+    sec = _PAGE_SECTION_MAP.get(key) or _PAGE_SECTION_MAP.get(key.split("/")[-1])
+    if sec:
+        return GROUP_REQUIRED_TIER.get(sec)
+    # 3) 兜底：兼容传入 accent group_key（portfolio / monitor ...）
+    return GROUP_REQUIRED_TIER.get(group_for_page(key))
+
+
+def locked_pages_for(tier: Optional[str]) -> List[str]:
+    """当前档位下仍被锁定的页面文件名列表（用于侧栏打标记）。"""
+    locked: List[str] = []
+    for _sec, items in NAV_GROUPS:
+        req = GROUP_REQUIRED_TIER.get(_sec)
+        if req and not tier_meets(tier, req):
+            locked.extend(path.replace("\\", "/").split("/")[-1] for path, *_ in items)
+    return locked
+
 
 
 def group_for_page(filename_or_path: str) -> str:
@@ -104,19 +174,89 @@ def group_for_page(filename_or_path: str) -> str:
     return PAGE_GROUP_MAP.get(base, "screen")
 
 
+def section_for_page(filename_or_path: str) -> str:
+    """返回页面所属的中文栏目名（如 "持仓组合"）；未知返回空串。"""
+    p = str(filename_or_path).replace("\\", "/")
+    if p in _PAGE_SECTION_MAP:
+        return _PAGE_SECTION_MAP[p]
+    return _PAGE_SECTION_MAP.get(p.split("/")[-1], "")
+
+
+def pages_in_section(section: str) -> List[str]:
+    """某栏目下的页面标题列表（用于订阅引导页展示解锁范围）。"""
+    for sec, items in NAV_GROUPS:
+        if sec == section:
+            return [title for _path, title, _icon, _g in items]
+    return []
+
+
+def _nav_user_tier() -> str:
+    """导航构建时读取当前用户档位。
+
+    app.py 在页面脚本执行前构建侧栏，此时 st.session_state["user"]
+    可能尚未恢复（登录态由 require_auth 从 token 还原），因此这里
+    自行尝试从 session / URL token 解析一次，并按会话缓存结果。
+    """
+    try:
+        import streamlit as st
+    except Exception:
+        return "free"
+
+    cached = st.session_state.get("_nav_user_tier")
+    if cached:
+        return cached
+
+    tier = "free"
+    user = st.session_state.get("user")
+    if user:
+        tier = (user.get("tier") or "free").lower()
+    else:
+        try:
+            from core.auth import AuthManager
+            from core.user_repo import UserRepo
+
+            token = st.session_state.get("auth_token", "") or st.query_params.get("auth", "")
+            if token:
+                payload = AuthManager.verify_token(token)
+                if payload:
+                    u = UserRepo().get_by_id(payload["user_id"])
+                    if u:
+                        tier = (u.get("tier") or "free").lower()
+                        # 顺手把用户写回 session，避免下面各页重复查库
+                        st.session_state["user"] = {k: v for k, v in u.items() if k != "password_hash"}
+                        st.session_state["auth_token"] = token
+        except Exception:
+            pass
+
+    st.session_state["_nav_user_tier"] = tier
+    return tier
+
+
 def build_streamlit_nav(home_page, *, include_admin: bool = True) -> Dict[str, list]:
-    """构造 st.navigation 字典。home_page 为工作台 st.Page。"""
+    """构造 st.navigation 字典。home_page 为工作台 st.Page。
+
+    托管版下，未订阅足够档位的菜单仍会展示（显性保留），
+    仅在标题后追加 🔒 提示需要订阅；点击后由页面守卫渲染订阅引导。
+    """
     import streamlit as st
+
+    from core.middleware import is_cloud_edition
+
+    gating_on = is_cloud_edition()
+    tier = _nav_user_tier() if gating_on else "enterprise"
 
     nav: Dict[str, list] = {
         "今日看板": [home_page],
     }
     for section, items in NAV_GROUPS:
+        required = GROUP_REQUIRED_TIER.get(section) if gating_on else None
+        section_locked = bool(required) and not tier_meets(tier, required)
         pages = []
         for path, title, icon, _group in items:
             if path.endswith("97_用户管理.py") and not include_admin:
                 continue
-            pages.append(st.Page(path, title=title, icon=icon))
+            label = f"{title} 🔒" if section_locked else title
+            pages.append(st.Page(path, title=label, icon=icon))
         if section == "今日看板":
             nav["今日看板"].extend(pages)
         else:

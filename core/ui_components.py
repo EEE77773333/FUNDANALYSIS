@@ -68,13 +68,16 @@ def render_page_header(title: str, icon: str, description: str, help_text: Optio
     require_auth()
     apply_plotly_theme()
 
-    if not group:
-        try:
-            import inspect
-            from .nav_catalog import group_for_page
-            caller = inspect.stack()[1].filename
+    # 当前页面文件名（用于自动判定栏目 + 套餐权限）
+    caller = None
+    try:
+        import inspect
+        from .nav_catalog import group_for_page
+        caller = inspect.stack()[1].filename
+        if not group:
             group = group_for_page(caller)
-        except Exception:
+    except Exception:
+        if not group:
             group = None
 
     color = _resolve_accent_color(group=group, accent_color=accent_color)
@@ -94,6 +97,11 @@ def render_page_header(title: str, icon: str, description: str, help_text: Optio
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # 套餐订阅守卫（仅托管版生效）：档位不足时渲染「请进行订阅」并中止本页正文
+    from core.middleware import require_feature_access
+    if not require_feature_access(caller):
+        st.stop()
 
     if help_text:
         with st.expander("使用说明", expanded=False):

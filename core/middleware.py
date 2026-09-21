@@ -355,6 +355,178 @@ def require_ai_quota(feature_label: str = "AI 分析") -> bool:
     return False
 
 
+# ============================================================
+# 套餐订阅守卫（菜单权限控制）
+# ============================================================
+#
+# 设计要点：
+#   1. 菜单在侧栏「显性保留」，未订阅用户同样看得见（标题带 🔒）；
+#   2. 打开受限菜单时渲染「请进行订阅」引导页，不进入功能正文；
+#   3. 仅在托管版（EDITION=cloud）生效；开源自部署（community）全解锁；
+#   4. 门槛配置集中在 core/nav_catalog.GROUP_REQUIRED_TIER，改一处即可。
+
+# 订阅档位环境变量：订阅联系方式（微信号 / 邮箱 / 链接），运营方可在 .env 里配置
+SUBSCRIBE_CONTACT = (os.getenv("SUBSCRIBE_CONTACT", "") or "").strip()
+
+# 栏目 → 该栏目需要的档位描述（引导页文案）
+_TIER_CN = {"free": "免费版", "plus": "个人版", "pro": "专业版", "enterprise": "企业版"}
+
+
+def current_user_tier() -> str:
+    """当前登录用户的套餐档位（未知按 free）。"""
+    user = st.session_state.get("user") or {}
+    return (user.get("tier") or "free").strip().lower()
+
+
+def _detect_page_path() -> Optional[str]:
+    """从调用栈里找出当前页面脚本路径（兜底用，避免漏判）。"""
+    try:
+        import inspect
+
+        for frame in inspect.stack():
+            fn = (frame.filename or "").replace("\\", "/")
+            if "/pages/" in fn and fn.endswith(".py"):
+                return fn
+    except Exception:
+        pass
+    return None
+
+
+def require_feature_access(page_or_group: Optional[str] = None) -> bool:
+    """订阅守卫：打开受限菜单时校验套餐档位。
+
+    托管版下若档位不足，渲染「请进行订阅」引导页并返回 False（调用方应 st.stop()）。
+    社区版恒返回 True。
+
+    Args:
+        page_or_group: 页面路径/文件名（如 __file__）或栏目名（如 "持仓组合"）
+
+    使用示例:
+        from core.middleware import require_feature_access
+        if not require_feature_access(__file__):
+            st.stop()
+    """
+    if not is_cloud_edition():
+        return True
+
+    try:
+        from core.nav_catalog import required_tier_for, tier_meets
+    except Exception:
+        return True
+
+    target = page_or_group or _detect_page_path()
+    required = required_tier_for(target) if target else None
+    if not required:
+        return True
+
+    user = st.session_state.get("user") or {}
+    tier = current_user_tier()
+    if user and tier_meets(tier, required):
+        return True
+
+    render_subscription_required(required, target)
+    return False
+
+
+def render_subscription_required(required_tier: str, page_or_group: Optional[str] = None) -> None:
+    """渲染「请进行订阅」引导页。"""
+    try:
+        from core.nav_catalog import (
+            GROUP_REQUIRED_TIER,
+            pages_in_section,
+            section_for_page,
+            tier_meets,
+        )
+    except Exception:  # pragma: no cover - 理论上不会发生
+        st.error("请进行订阅")
+        return
+
+    section = ""
+    if page_or_group:
+        key = str(page_or_group).replace("\\", "/")
+        if key in GROUP_REQUIRED_TIER:
+            section = key
+        else:
+            section = section_for_page(key)
+    if not section:
+        # 兜底：反查该档位对应的栏目
+        for sec, req in GROUP_REQUIRED_TIER.items():
+            if req == required_tier:
+                section = sec
+                break
+
+    tier = current_user_tier()
+    req_label = TIER_LABELS.get(required_tier, _TIER_CN.get(required_tier, required_tier))
+    cur_label = TIER_LABELS.get(tier, tier)
+    price = TIER_PRICING.get(required_tier, "")
+
+    # 主提示（不依赖主题的配色，深浅色模式都可读）
+    st.markdown(
+        f"""
+        <div style="border:1px solid rgba(220,38,38,.35);background:rgba(220,38,38,.08);
+                    border-left:4px solid #DC2626;border-radius:12px;
+                    padding:1.5rem 1.75rem;margin:0.5rem 0 1.25rem;">
+            <div style="font-size:1.35rem;font-weight:800;letter-spacing:.02em;margin-bottom:.5rem;">
+                🔒 请进行订阅
+            </div>
+            <div style="font-size:.92rem;line-height:1.75;">
+                「{section or '该功能'}」需要 <b>{req_label}</b> 及以上套餐，
+                当前你的套餐为 <b>{cur_label}</b>，暂无权使用。
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # 解锁后可见的菜单
+    features = pages_in_section(section) if section else []
+    if features:
+        cols = st.columns([3, 2])
+        with cols[0]:
+            st.markdown(f"**订阅 {req_label} 后可解锁「{section}」全部 {len(features)} 个功能：**")
+            for name in features:
+                st.markdown(f"- {name}")
+        with cols[1]:
+            st.markdown("**套餐权益**")
+            for b in TIER_BENEFITS.get(required_tier, [])[:5]:
+                st.markdown(f"- {b}")
+            if price:
+                st.caption(f"参考价：{price}")
+
+    st.divider()
+
+    # 档位对照
+    with st.expander("📊 查看全部套餐对照", expanded=False):
+        rows = []
+        for t in ("free", "plus", "pro", "enterprise"):
+            rows.append(
+                {
+                    "套餐": TIER_LABELS.get(t, t),
+                    "价格": TIER_PRICING.get(t, ""),
+                    "每日 AI 次数": QUOTA_MAP.get(t, {}).get("ai_analysis", 0),
+                    "深度分析 / 持仓组合": "✅" if tier_meets(t, "pro") else "—",
+                    "监控预警": "✅" if tier_meets(t, "enterprise") else "—",
+                }
+            )
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    # 行动指引
+    if SUBSCRIBE_CONTACT:
+        st.success(f"**开通 / 升级方式**：{SUBSCRIBE_CONTACT}")
+    else:
+        st.info(
+            "**开通 / 升级方式**：请通过页面右下角的联系方式与管理员取得联系，"
+            "说明需要开通的套餐档位（专业版 / 企业版）。\n\n"
+            "_（运营方可设置环境变量 `SUBSCRIBE_CONTACT` 自定义此处文案，"
+            "例如微信号或开通链接。）_"
+        )
+
+    st.caption(
+        "提示：菜单会一直保留在左侧，订阅开通后无需重新登录即可直接进入。"
+        "如果你已订阅，请点击左下角「退出登录」后重新登录以刷新套餐状态。"
+    )
+
+
 def record_api_call() -> bool:
     """
     【已废弃】手动记录一次 AI 调用。
