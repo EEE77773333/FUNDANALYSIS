@@ -149,33 +149,6 @@ streamlit run app.py
 
 ---
 
-## 推送到 GitHub
-
-仓库地址：**https://github.com/EEE77773333/FUNDANALYSIS**
-
-后续改动提交后，一条命令推送：
-
-```bash
-cd ~/Downloads/FUND-ANALYSIS
-git add -A && git commit -m "你的改动说明"
-./push_to_github.sh git@github.com:EEE77773333/FUNDANALYSIS.git
-```
-
-推送脚本会在推送前自动做两项检查：
-
-- **敏感文件体检** —— 若 `.env`、`fund_analysis.db`、`notification_config.json`、`.jwt_secret` 被纳入版本控制，**直接中止**并给出修复命令
-- **SSH 连通性预检** —— 区分「密钥未授权」与「本机代理封锁 22 端口」两类问题，分别给出解法
-
-> 若本机代理封锁了 22 端口（报 `Connection closed by ... port 22`），把 GitHub 的 SSH 改走 443 端口即可，在 `~/.ssh/config` 中加入：
->
-> ```
-> Host github.com
->   HostName ssh.github.com
->   Port 443
->   User git
-> ```
-
----
 
 ## 配置你自己的 AI 模型
 
