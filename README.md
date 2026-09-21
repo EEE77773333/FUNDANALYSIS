@@ -113,7 +113,7 @@
 ### 方式一：Docker（推荐，一行命令）
 
 ```bash
-git clone <项目地址> && cd <项目目录>
+git clone https://github.com/EEE77773333/FUNDANALYSIS.git && cd FUNDANALYSIS
 docker compose up -d
 ```
 
@@ -124,7 +124,7 @@ docker compose up -d
 ### 方式二：本地 Python（最轻量，零配置）
 
 ```bash
-git clone <项目地址> && cd <项目目录>
+git clone https://github.com/EEE77773333/FUNDANALYSIS.git && cd FUNDANALYSIS
 pip install -r requirements.txt
 streamlit run app.py
 ```
@@ -149,24 +149,31 @@ streamlit run app.py
 
 ---
 
-## 发布 / 分享到 GitHub
+## 推送到 GitHub
 
-本仓库已初始化好 Git，并内置一键推送脚本：
+仓库地址：**https://github.com/EEE77773333/FUNDANALYSIS**
 
-```bash
-# 1) 先在 https://github.com/new 创建一个**空仓库**（不要勾选 README / .gitignore / License）
-# 2) 回到本目录执行：
-./push_to_github.sh git@github.com:<你的用户名>/<仓库名>.git
-```
-
-脚本会在推送前自动做安全检查：若发现 `.env`、`fund_analysis.db`、`notification_config.json`、`.jwt_secret` 等敏感文件被纳入版本控制，会**直接中止**并给出修复命令。
-
-首次提交前建议确认作者信息（GitHub 按邮箱归属提交）：
+后续改动提交后，一条命令推送：
 
 ```bash
-git config user.name  "你的名字"
-git config user.email "你的邮箱"
+cd ~/Downloads/FUND-ANALYSIS
+git add -A && git commit -m "你的改动说明"
+./push_to_github.sh git@github.com:EEE77773333/FUNDANALYSIS.git
 ```
+
+推送脚本会在推送前自动做两项检查：
+
+- **敏感文件体检** —— 若 `.env`、`fund_analysis.db`、`notification_config.json`、`.jwt_secret` 被纳入版本控制，**直接中止**并给出修复命令
+- **SSH 连通性预检** —— 区分「密钥未授权」与「本机代理封锁 22 端口」两类问题，分别给出解法
+
+> 若本机代理封锁了 22 端口（报 `Connection closed by ... port 22`），把 GitHub 的 SSH 改走 443 端口即可，在 `~/.ssh/config` 中加入：
+>
+> ```
+> Host github.com
+>   HostName ssh.github.com
+>   Port 443
+>   User git
+> ```
 
 ---
 
