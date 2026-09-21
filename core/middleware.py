@@ -134,6 +134,8 @@ def show_login_page():
                         token, user = result
                         st.session_state["auth_token"] = token
                         st.session_state["user"] = user
+                        # 登录后套餐可能变化 → 清掉侧栏档位缓存，让权限标记立即刷新
+                        st.session_state.pop("_nav_user_tier", None)
                         # 持久化到 URL，刷新后可恢复登录态
                         st.query_params["auth"] = token
                         st.success(f"✅ 欢迎回来，{user.get('display_name') or user['email']}")

@@ -197,6 +197,7 @@ def main():
     if st.button("🚪 退出登录"):
         st.session_state.pop("auth_token", None)
         st.session_state.pop("user", None)
+        st.session_state.pop("_nav_user_tier", None)  # 清掉侧栏档位缓存
         st.query_params.pop("auth", None)
         st.success("已退出登录")
         st.rerun()
