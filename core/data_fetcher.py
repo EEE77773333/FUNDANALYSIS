@@ -101,6 +101,76 @@ def _safe_empty_df(columns: list) -> pd.DataFrame:
     """返回带正确列名的空 DataFrame，避免下游 pandas 操作崩溃。"""
     return pd.DataFrame(columns=columns)
 
+
+# ============================================================
+# 基金盘中估值：备用数据源
+# ------------------------------------------------------------
+# 天天基金的估值接口（fundgz.1234567.com.cn/js/{code}.js）已于 2024 年前后
+# 下线，现在统一返回「页面未找到」，因此 get_realtime_estimate 必须另有兜底，
+# 否则所有实时估值相关功能（盘中估值中心 / 工作台 / 筛选页 / 持续监控）静默无数据。
+#
+# akshare 的 fund_value_estimation_em 提供全市场估值表，但它只覆盖有可跟踪
+# 标的的基金（指数型、ETF 联接等，约 700 只）；主动管理型基金上游已不再提供
+# 盘中估值，这类基金取不到属正常，调用方应回退展示「上一日净值」。
+# ============================================================
+
+_ESTIMATE_CACHE: Dict[str, Any] = {"ts": 0.0, "map": None}
+_ESTIMATE_CACHE_TTL = 180  # 秒：全市场表约 700 行，避免每个基金都重拉一次
+
+
+def _ak_estimate_map() -> Dict[str, Dict[str, Any]]:
+    """拉取 akshare 全市场估值表，返回 {基金代码: {...}}；失败返回空字典。"""
+    import time as _time
+
+    now = _time.time()
+    cached_map = _ESTIMATE_CACHE.get("map")
+    if cached_map is not None and now - float(_ESTIMATE_CACHE.get("ts") or 0) < _ESTIMATE_CACHE_TTL:
+        return cached_map
+
+    result: Dict[str, Dict[str, Any]] = {}
+    try:
+        import akshare as ak
+
+        df = ak.fund_value_estimation_em(symbol="全部")
+        if df is not None and not df.empty:
+            cols = [str(c) for c in df.columns]
+
+            def _col(suffix: str, exclude: str = "") -> Optional[str]:
+                for c in cols:
+                    if c.endswith(suffix) and (not exclude or exclude not in c):
+                        return c
+                return None
+
+            c_code = next((c for c in cols if "基金代码" in c), None)
+            c_name = next((c for c in cols if "基金名称" in c), None)
+            c_est = _col("估算数据-估算值")
+            c_pct = _col("估算数据-估算增长率")
+            c_nav = _col("公布数据-单位净值")
+            c_prev = _col("-单位净值", exclude="公布数据")
+            if c_code:
+                for _, row in df.iterrows():
+                    fc = str(row.get(c_code, "") or "").strip()
+                    if not fc:
+                        continue
+                    prev_nav = 0.0
+                    if c_nav:
+                        prev_nav = safe_float(row.get(c_nav, 0))
+                    if not prev_nav and c_prev:
+                        prev_nav = safe_float(row.get(c_prev, 0))
+                    result[fc] = {
+                        "基金名称": str(row.get(c_name, "") or "") if c_name else "",
+                        "估算净值": safe_float(row.get(c_est, 0)) if c_est else 0.0,
+                        "估算涨幅%": safe_float(str(row.get(c_pct, 0) or 0).replace("%", "")) if c_pct else 0.0,
+                        "上一日净值": prev_nav,
+                    }
+    except Exception as e:
+        logger.debug(f"akshare 全市场估值表获取失败: {e}")
+        result = {}
+
+    _ESTIMATE_CACHE["map"] = result
+    _ESTIMATE_CACHE["ts"] = now
+    return result
+
 # 数据源导入（可选，允许降级运行）
 try:
     import akshare as ak
@@ -486,15 +556,47 @@ class DataFetcher:
     @persistent_cache("realtime")  # ttl=None → 用用户配置的实时行情缓存时长
     def get_realtime_estimate(self, code: str) -> Optional[Dict[str, Any]]:
         """
-        获取基金实时估算净值（交易时段有效）。
+        获取基金盘中估算净值。
+
+        取数优先级：
+          1) 天天基金估值接口（fundgz）—— 上游已下线，保留探测以便其恢复；
+          2) akshare 全市场估值表 —— 覆盖指数型 / ETF 联接等约 700 只基金。
+
+        主动管理型基金上游已停止提供盘中估值，两者都取不到时返回 None。
+        调用方应回退展示「上一日净值」并说明原因，不要留空白。
 
         Args:
             code: 基金代码
 
         Returns:
-            dict: {name, code, nav_time, estimated_nav, estimated_pct,
-                   last_nav, last_nav_date, premium_pct}
+            dict: {基金代码, 基金名称, 估算时间, 估算净值, 估算涨幅%,
+                   上一日净值, 上一日日期, 数据来源}；无估值时 None
         """
+        code = str(code or "").strip()
+        if not code:
+            return None
+
+        direct = self._realtime_from_eastmoney(code)
+        if direct:
+            direct["数据来源"] = "eastmoney"
+            return direct
+
+        row = _ak_estimate_map().get(code)
+        if row:
+            return {
+                "基金代码": code,
+                "基金名称": row.get("基金名称", ""),
+                "估算时间": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "估算净值": row.get("估算净值", 0.0),
+                "估算涨幅%": row.get("估算涨幅%", 0.0),
+                "上一日净值": row.get("上一日净值", 0.0),
+                "上一日日期": "",
+                "数据来源": "akshare",
+            }
+        return None
+
+    def _realtime_from_eastmoney(self, code: str) -> Optional[Dict[str, Any]]:
+        """天天基金估值接口（jsonpgz）。上游已下线，返回 None 属预期行为。"""
         url = EASTMONEY_REALTIME_NAV.format(code=code)
         # 天天基金实时估值接口返回 JSONP: jsonpgz({...});
         text = _http_get(url)

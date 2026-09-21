@@ -262,6 +262,39 @@ class EastmoneySource(DataSource):
         return handler(**kwargs)
 
 
+def _akshare_realtime(fund_code: str) -> Optional[Dict[str, Any]]:
+    """akshare 盘中估值取数。
+
+    复用 core.data_fetcher 内的全市场估值表缓存，避免每个基金都重拉一次。
+    仅覆盖有可跟踪标的的基金（指数型 / ETF 联接）；主动管理型基金上游已不提供。
+    """
+    code = str(fund_code or "").strip()
+    if not code:
+        return None
+    try:
+        from ..data_fetcher import _ak_estimate_map
+
+        row = _ak_estimate_map().get(code)
+    except Exception as e:
+        logger.debug(f"[akshare] realtime 失败: {e}")
+        return None
+    if not row:
+        return None
+
+    from datetime import datetime
+
+    return {
+        "基金代码": code,
+        "基金名称": row.get("基金名称", ""),
+        "估算时间": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "估算净值": row.get("估算净值", 0.0),
+        "估算涨幅%": row.get("估算涨幅%", 0.0),
+        "上一日净值": row.get("上一日净值", 0.0),
+        "上一日日期": "",
+        "数据来源": "akshare",
+    }
+
+
 class AkshareSource(DataSource):
     """
     AKShare 数据源（免 token，覆盖面最广）。
@@ -289,6 +322,8 @@ class AkshareSource(DataSource):
             "fund_nav": lambda **kw: ak.fund_open_fund_info_em(
                 symbol=kw.get("fund_code", ""), indicator="单位净值走势"
             ),
+            # 盘中估值：akshare 全市场估值表（覆盖指数型/ETF 联接；主动基金上游已不提供）
+            "realtime": lambda **kw: _akshare_realtime(kw.get("fund_code", "")),
             "sector_board": lambda **kw: ak.stock_sector_spot(indicator="行业"),
             "macro_cpi": lambda **kw: ak.macro_china_cpi_monthly(),
             "macro_ppi": lambda **kw: ak.macro_china_ppi_yearly(),

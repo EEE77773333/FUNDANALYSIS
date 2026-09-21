@@ -188,9 +188,14 @@ def main():
             st.success("偏好已保存")
 
     # 管理员快捷入口
+    # 注意：st.page_link 传文件路径字符串会因 Streamlit 内部路径比对失败而抛
+    # StreamlitPageNotFoundError（整页变红），必须传 st.Page 返回的页面对象。
+    # 该页面在非管理员下不会被注册，此时 has_page 为 False，直接不渲染入口。
     if admin_mode:
-        st.divider()
-        st.page_link("pages/97_用户管理.py", label="👥 进入用户管理", icon="👥")
+        from core.nav_catalog import has_page, safe_page_link
+        if has_page("pages/97_用户管理.py"):
+            st.divider()
+            safe_page_link("pages/97_用户管理.py", label="👥 进入用户管理", icon="👥")
 
     # 退出登录
     st.divider()

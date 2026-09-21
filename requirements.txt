@@ -5,7 +5,9 @@
 akshare>=1.14.0          # 天天基金/东方财富数据封装（需 Node.js 环境）
 efinance>=0.5.0          # 个股K线数据（稳定，代理兼容性好）
 tushare>=1.4.0           # 基金持仓/宏观数据备选（需免费注册token）
+baostock>=0.8.9          # 长周期指数/个股日线备选（免 token，国内直连稳定）
 requests>=2.31.0         # HTTP 请求（天天基金直接API）
+# yfinance>=0.2.40       # 可选：海外行情。需能访问 Yahoo，国内服务器通常不可用，按需开启
 
 # AI 分析
 openai>=1.50.0           # DeepSeek API 客户端（OpenAI 兼容格式）

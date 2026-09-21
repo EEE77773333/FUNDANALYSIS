@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 # (script_path, title, icon, group_key)
 # group_key → core.ui_components.GROUP_ACCENTS
@@ -245,6 +248,8 @@ def build_streamlit_nav(home_page, *, include_admin: bool = True) -> Dict[str, l
     gating_on = is_cloud_edition()
     tier = _nav_user_tier() if gating_on else "enterprise"
 
+    _PAGE_REGISTRY.clear()
+
     nav: Dict[str, list] = {
         "今日看板": [home_page],
     }
@@ -256,12 +261,84 @@ def build_streamlit_nav(home_page, *, include_admin: bool = True) -> Dict[str, l
             if path.endswith("97_用户管理.py") and not include_admin:
                 continue
             label = f"{title} 🔒" if section_locked else title
-            pages.append(st.Page(path, title=label, icon=icon))
+            page = st.Page(path, title=label, icon=icon)
+            _register_page(path, page)
+            pages.append(page)
         if section == "今日看板":
             nav["今日看板"].extend(pages)
         else:
             nav[section] = pages
     return nav
+
+
+# ============================================================
+# 页面对象注册表
+# ------------------------------------------------------------
+# Streamlit 的 st.page_link / st.switch_page 只接受 st.Page 返回的
+# StreamlitPage 对象；传文件路径字符串时，其内部按 os.path.realpath 比对
+# 注册表，路径形态稍有差异就会抛 StreamlitPageNotFoundError，把整页打成
+# 红色报错框。此处缓存 build_streamlit_nav 建好的页面对象，供页面内跳转
+# 复用，彻底绕开该字符串匹配问题。
+# ============================================================
+
+_PAGE_REGISTRY: Dict[str, Any] = {}
+
+
+def _register_page(path: str, page: Any) -> None:
+    """登记页面对象，同时支持「完整路径」与「文件名」两种键。"""
+    key = str(path).replace("\\", "/")
+    _PAGE_REGISTRY[key] = page
+    _PAGE_REGISTRY[key.split("/")[-1]] = page
+
+
+def get_page(path_or_name: str):
+    """按路径或文件名取回已注册的 StreamlitPage；未注册时返回 None。
+
+    返回 None 的典型场景：管理员页面在当前用户下被 include_admin 过滤掉。
+    """
+    if not path_or_name:
+        return None
+    key = str(path_or_name).replace("\\", "/")
+    return _PAGE_REGISTRY.get(key) or _PAGE_REGISTRY.get(key.split("/")[-1])
+
+
+def has_page(path_or_name: str) -> bool:
+    """该页面当前是否已注册（用于决定是否渲染入口，避免出现死链接）。"""
+    return get_page(path_or_name) is not None
+
+
+def safe_page_link(path_or_name: str, **kwargs) -> bool:
+    """渲染指向内部页面的链接；页面未注册时不渲染并返回 False。
+
+    st.page_link 传字符串路径会因注册表比对失败而抛错，故统一走页面对象。
+    """
+    import streamlit as st
+
+    page = get_page(path_or_name)
+    if page is None:
+        return False
+    try:
+        st.page_link(page, **kwargs)
+    except Exception as e:  # 兜底：任何情况下都不应让整页报错
+        logger.warning(f"page_link 失败 ({path_or_name}): {e}")
+        return False
+    return True
+
+
+def safe_switch_page(path_or_name: str) -> bool:
+    """跳转到内部页面；页面未注册时返回 False（调用方自行提示）。"""
+    import streamlit as st
+
+    page = get_page(path_or_name)
+    if page is None:
+        return False
+    try:
+        st.switch_page(page)
+    except Exception as e:
+        logger.warning(f"switch_page 失败 ({path_or_name}): {e}")
+        return False
+    return True
+
 
 
 def workbench_quick_links() -> List[Tuple[str, str, str]]:

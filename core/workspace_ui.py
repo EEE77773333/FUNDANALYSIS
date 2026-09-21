@@ -39,7 +39,9 @@ def _goto_famas(code: str, name: str = "") -> None:
     touch_recent("fund", code, name or code)
     st.session_state["famas_fund_code_prefills"] = code
     st.query_params["fund"] = code
-    st.switch_page("pages/08_FAMAS单基金深度分析.py")
+    # 必须传页面对象：传路径字符串会抛 StreamlitPageNotFoundError，跳转静默失效
+    from core.nav_catalog import safe_switch_page
+    safe_switch_page("pages/08_FAMAS单基金深度分析.py")
 
 
 def render_quota_badge() -> None:
@@ -96,7 +98,8 @@ def render_global_search() -> None:
                 elif action == "持续监控页":
                     st.session_state["watch_prefill_code"] = kw
                     touch_recent("fund", kw, kw)
-                    st.switch_page("pages/09_持续监控预警.py")
+                    from core.nav_catalog import safe_switch_page
+                    safe_switch_page("pages/09_持续监控预警.py")
                 else:
                     _goto_famas(kw)
             return
@@ -118,7 +121,8 @@ def render_global_search() -> None:
                     elif action == "持续监控页":
                         st.session_state["watch_prefill_code"] = code
                         touch_recent("fund", code, name)
-                        st.switch_page("pages/09_持续监控预警.py")
+                        from core.nav_catalog import safe_switch_page
+                        safe_switch_page("pages/09_持续监控预警.py")
                     else:
                         _goto_famas(code, name)
         except Exception as e:

@@ -219,19 +219,30 @@ def render_dependency_status():
     """依赖状态 Tab"""
     section_header("导出依赖状态")
 
+    # (发行包名, 导入名, 安装命令) —— 两者常不一致，例如 python-docx 的导入名是 docx，
+    # 之前用 pkg.replace("-","_") 推导导入名，导致已安装的 Word 库被误报为「未安装」。
     deps = {
-        "Word (.docx)": ("python-docx", "pip install python-docx"),
-        "PDF (.pdf)": ("weasyprint", "pip install weasyprint"),
-        "Excel (.xlsx)": ("openpyxl", "pip install openpyxl"),
+        "Word (.docx)": ("python-docx", "docx", "pip install python-docx"),
+        "PDF (.pdf)": ("weasyprint", "weasyprint", "pip install weasyprint"),
+        "Excel (.xlsx)": ("openpyxl", "openpyxl", "pip install openpyxl"),
     }
 
-    for name, (pkg, install_cmd) in deps.items():
-        import_name = pkg.replace("-", "_")
+    from importlib.metadata import PackageNotFoundError, version
+
+    for name, (dist, import_name, install_cmd) in deps.items():
+        ver = None
         try:
-            mod = __import__(import_name)
-            ver = getattr(mod, "__version__", "已安装")
+            ver = version(dist)
+        except PackageNotFoundError:
+            # 少数环境发行包元数据缺失，退回按导入名探测
+            try:
+                mod = __import__(import_name)
+                ver = getattr(mod, "__version__", "已安装")
+            except ImportError:
+                ver = None
+        if ver:
             st.success(f"✅ {name}: {ver}")
-        except ImportError:
+        else:
             st.error(f"❌ {name}: 未安装 — `{install_cmd}`")
 
     st.divider()

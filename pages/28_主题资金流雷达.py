@@ -83,7 +83,9 @@ def _goto_famas(code: str, name: str = "") -> None:
     touch_recent("fund", code, name or code)
     st.session_state["famas_fund_code_prefills"] = code
     st.query_params["fund"] = code
-    st.switch_page("pages/08_FAMAS单基金深度分析.py")
+    # 必须传页面对象：传路径字符串会抛 StreamlitPageNotFoundError 导致跳转无声失败
+    from core.nav_catalog import safe_switch_page
+    safe_switch_page("pages/08_FAMAS单基金深度分析.py")
 
 
 if "theme_flow_data" not in st.session_state:
