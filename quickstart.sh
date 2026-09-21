@@ -117,7 +117,7 @@ case "$MODE" in
     ;;
 
   *)
-    fail "未知模式：$MODE（可选 docker / local / auto）"
+    fail "未知模式：${MODE}（可选 docker / local / auto）"
     exit 1
     ;;
 esac

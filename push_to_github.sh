@@ -42,6 +42,35 @@ if git ls-files | grep -qE "(^|/)(fund_analysis\.db|notification_config\.json|\.
 fi
 echo "✅ 未发现敏感文件被跟踪"
 
+# ---------- SSH 连通性预检（代理/端口问题会给出可读的解法）----------
+case "$REMOTE_URL" in
+  git@*|ssh://*)
+    SSH_HOST="$(printf '%s' "$REMOTE_URL" | sed -E 's#^ssh://([^@]*@)?##; s#^git@##; s#[:/].*##')"
+    echo "🔍 检测 SSH 连通性（${SSH_HOST}）..."
+    SSH_OUT="$(ssh -T -o BatchMode=yes -o ConnectTimeout=8 "git@$SSH_HOST" 2>&1 || true)"
+    if printf '%s' "$SSH_OUT" | grep -q "successfully authenticated"; then
+      echo "✅ SSH 认证正常"
+    elif printf '%s' "$SSH_OUT" | grep -qE "Permission denied"; then
+      echo "❌ SSH 密钥未被 GitHub 接受。"
+      echo "   请把公钥添加到 https://github.com/settings/ssh/new"
+      echo "   公钥内容："
+      echo "     $(cat ~/.ssh/id_ed25519.pub 2>/dev/null || echo '(未找到 ~/.ssh/id_ed25519.pub)')"
+      exit 1
+    elif printf '%s' "$SSH_OUT" | grep -qE "Connection closed|Connection refused|port 22|Operation timed out|Network is unreachable"; then
+      echo "❌ SSH 无法连接（常见原因：本地代理以 fake-IP 模式封锁了 22 端口）。"
+      echo "   解法：把 GitHub 的 SSH 改走 443 端口，在 ~/.ssh/config 加入："
+      echo "     Host github.com"
+      echo "       HostName ssh.github.com"
+      echo "       Port 443"
+      echo "       User git"
+      echo "   或改用 HTTPS 地址：./push_to_github.sh https://github.com/<用户>/<仓库>.git"
+      exit 1
+    else
+      echo "ℹ️ 连通性预检未得出结论，继续尝试推送..."
+    fi
+    ;;
+esac
+
 # ---------- 配置远程并推送 ----------
 if git remote get-url origin >/dev/null 2>&1; then
   echo "ℹ️  origin 已存在，更新为：$REMOTE_URL"
