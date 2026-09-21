@@ -28,10 +28,24 @@
 
 **没有次数限制**：成本由你自己的模型 key 承担。
 
-> 📸 **功能演示**
->
-> 建议在这里放 3~5 张截图或一段 30 秒 GIF（工作台 / FAMAS 深度分析 / 组合诊断 / 监控预警）。
-> 保存到 `docs/images/` 后替换本段。
+<table>
+  <tr>
+    <th align="center">实时市场收盘盘</th>
+    <th align="center">主题资金流雷达</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/market-overview.png" alt="实时市场收盘盘" width="480"></td>
+    <td align="center"><img src="docs/images/theme-moneyflow-radar.png" alt="主题资金流雷达" width="480"></td>
+  </tr>
+  <tr>
+    <th align="center">FAMAS 单基金深度分析</th>
+    <th align="center">行业热度地图</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/famas-fund-analysis.png" alt="FAMAS 单基金深度分析" width="480"></td>
+    <td align="center"><img src="docs/images/industry-heat-map.png" alt="行业热度地图" width="480"></td>
+  </tr>
+</table>
 
 ---
 
