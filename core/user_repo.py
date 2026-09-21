@@ -164,7 +164,19 @@ class UserRepo:
             return [dict(r) for r in rows]
 
     def set_tier(self, user_id: int, tier: str, calls_limit: int = None):
-        """修改用户套餐"""
+        """修改用户套餐。
+
+        calls_limit 未显式传入时，从 QUOTA_MAP 按档位推导，保证
+        api_calls_limit 列始终与档位一致（该列会被 get_usage / 日报等
+        展示路径读取，遗留旧值会导致显示的配额与实际不符）。
+        QUOTA_MAP 仍是唯一权威来源，此处只是同步镜像。
+        """
+        if calls_limit is None:
+            try:
+                from .middleware import QUOTA_MAP
+                calls_limit = QUOTA_MAP.get(tier, {}).get("ai_analysis")
+            except Exception:
+                calls_limit = None
         ph = self._ph()
         with get_connection() as conn:
             if calls_limit is not None:

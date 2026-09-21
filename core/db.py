@@ -358,6 +358,26 @@ def _apply_schema_migrations(conn):
     except Exception:
         pass
 
+    # 同上：UserRepo.set_tier() 早期只更新 tier 列、不同步 api_calls_limit，导致该列与
+    # 实际档位长期脱节（如 pro 用户仍显示 10）。拦截逻辑以 QUOTA_MAP 为准不受影响，
+    # 但 get_usage / 每日简报等展示路径会读到旧值。此处按档位回填，SQL 与
+    # QUOTA_MAP[*]["ai_analysis"] 保持一致（幂等：已一致的行走 WHERE 过滤掉）。
+    _TIER_AI_LIMIT_CASE = (
+        "CASE tier "
+        "WHEN 'free' THEN 10 "
+        "WHEN 'plus' THEN 40 "
+        "WHEN 'pro' THEN 100 "
+        "WHEN 'enterprise' THEN 99999 "
+        "ELSE api_calls_limit END"
+    )
+    try:
+        exec_sql(
+            f"UPDATE users SET api_calls_limit = {_TIER_AI_LIMIT_CASE} "
+            f"WHERE api_calls_limit <> {_TIER_AI_LIMIT_CASE}"
+        )
+    except Exception:
+        pass
+
     # ---- 个人工作台：收藏 / 偏好 / 最近访问 ----
     exec_sql(f"""
         CREATE TABLE IF NOT EXISTS user_favorites (
