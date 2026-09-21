@@ -1,0 +1,87 @@
+version: "3.8"
+
+# ============================================================
+# 基金智能分析系统 — 一键部署
+#
+# 最简用法（本地 / 群晖 / NAS）：
+#     git clone <仓库地址> && cd <目录>
+#     docker compose up -d
+#     浏览器打开 http://localhost:8501
+#
+# 说明：
+# - 不需要预先准备 .env —— 未提供时下面用安全随机值兜底。
+# - 首次启动自动建库：
+#     · 单机模式（DATABASE_URL 留空）→ 自动创建本地用户 local@fund.local，免登录直接用
+#     · 多用户模式 → 设置了 ADMIN_DEFAULT_PASSWORD 才会创建管理员 admin@fund.local，
+#                    否则请在登录页自行注册（首个注册用户默认为免费版）
+# - 想跑单机版且不想装 Docker？用 `pip install -r requirements.txt && streamlit run app.py`
+#   即可，SQLite 零配置。
+# ============================================================
+
+services:
+  app:
+    build: .
+    image: fund-analysis:latest
+    container_name: fund-app
+    ports:
+      - "${APP_PORT:-8501}:8501"
+    # .env 存在就加载，不存在也能正常启动（required: false 需要 Compose v2.24+）
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # ---- 数据库 ----
+      # 显式设置 DATABASE_URL → 多用户模式；留空则自动连下方内置 postgres。
+      # 想用 SQLite 单机模式，把下面的 DATABASE_URL 设为空字符串。
+      DATABASE_URL: ${DATABASE_URL:-postgresql://fundadmin:${DB_PASSWORD:-fundadmin123456}@postgres:5432/fund_analysis}
+      # ---- 运行形态：community=开源自部署不限次 / cloud=托管版按套餐计费 ----
+      EDITION: ${EDITION:-community}
+      # ---- 默认管理员（仅多用户模式首次初始化时创建；不设置则不创建，避免弱口令后门）----
+      ADMIN_DEFAULT_PASSWORD: ${ADMIN_DEFAULT_PASSWORD:-}
+      # ---- 会话密钥（不设置则自动生成并持久化到 data/.jwt_secret）----
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
+      # ---- LLM（留空则用户在界面「账户设置 → AI 与数据源」里自行配置）----
+      LLM_PRESET: ${LLM_PRESET:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      # ---- 行情数据源 ----
+      DATA_PROVIDER: ${DATA_PROVIDER:-akshare}
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+      QUOTE_CACHE_TTL: ${QUOTE_CACHE_TTL:-300}
+      # ---- 数据目录（容器内固定 /app/data，已挂载到下方卷）----
+      DATA_DIR: /app/data
+      TZ: ${TZ:-Asia/Shanghai}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8501/_stcore/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: fund-pg
+    environment:
+      POSTGRES_USER: fundadmin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-fundadmin123456}
+      POSTGRES_DB: fund_analysis
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fundadmin -d fund_analysis"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

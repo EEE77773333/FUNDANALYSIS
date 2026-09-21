@@ -1,0 +1,54 @@
+# ============================================================
+# Docker 构建上下文忽略规则
+# 作用：缩小构建上下文、避免把私密文件与用户数据打进镜像层
+# ============================================================
+
+# ---- 私密配置 ----
+.env
+.env.*
+!.env.example
+*.secret
+.jwt_secret
+data/.jwt_secret
+
+# ---- 用户数据 ----
+*.db
+*.sqlite
+*.sqlite3
+data/notification_config.json
+data/*_cache.json
+data/evaluation_last_run.txt
+data/intraday_snapshots/
+data/theme_flow_snapshots/
+
+# ---- 版本控制与文档（镜像内不需要）----
+.git/
+.gitignore
+.github/
+README.md
+docs/
+LICENSE
+Release-Note_V1.md
+system.md
+
+# ---- 缓存与虚拟环境 ----
+__pycache__/
+*.py[cod]
+.venv/
+.venv_*/
+venv/
+.pytest_cache/
+.coverage
+
+# ---- 编辑器与系统 ----
+.claude/
+.trae/
+.agents/
+.idea/
+.vscode/
+.DS_Store
+._*
+
+# ---- 非产品代码 ----
+make_kimi_k3_ppt.py
+exports/

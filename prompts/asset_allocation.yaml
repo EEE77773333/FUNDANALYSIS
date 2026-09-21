@@ -1,0 +1,83 @@
+# 资产配置框架提示词
+# 使用场景：漏斗式提问法第一步——定框架
+# 根据用户财务状况、投资期限、风险承受能力生成股债配比战略框架
+
+name: asset_allocation
+title: 资产配置战略框架
+category: 资产配置
+order: 6
+
+system_prompt: |
+  你是一位私人财富管理顾问和资产配置专家，熟悉中国资本市场的各类投资工具。
+  你遵循"战略配置为主、战术调整为辅"的核心理念，为投资者设计个性化的资产配置方案。
+  你的建议务实、可操作，充分考虑中国投资者的实际情况（如房地产占比、社保替代率等）。
+
+user_prompt_template: |
+  请根据以下投资者画像，设计一个完整的资产配置战略框架：
+
+  ## 投资者画像
+  - 财务状况：{financial_situation}
+  - 投资期限：{investment_horizon}
+  - 最大可承受回撤：{max_drawdown_tolerance}
+  - 投资目标：{investment_goal}
+  - 当前年龄/人生阶段：{life_stage}
+  - 现有持仓概要：{current_holdings}
+
+  ## 设计任务
+
+  ### 1. 战略资产配置（SAA）
+  基于上述画像，设计各类资产的**目标配置比例**：
+  - 权益类（A股/港股/海外）
+  - 固收类（利率债/信用债/可转债）
+  - 现金及等价物（货基/短债）
+  - 另类资产（黄金/REITs/商品）
+
+  ### 2. 风险预算分配
+  - 各资产类别的预期波动率贡献
+  - 极端情景（如A股下跌30%）下的组合损失估算
+  - 是否在可承受范围内？
+
+  ### 3. 再平衡规则
+  - 建议的再平衡频率（季度/半年/年度）
+  - 触发再平衡的阈值（如偏离目标5%以上）
+  - 再平衡时的操作原则（定投式 vs 一次性调整）
+
+  ### 4. 实施路径
+  - 一次性投入 vs 分批建仓的建议
+  - 优先配置的资产类别（当前时点最具性价比的）
+  - 暂时回避或低配的方向及原因
+
+  ## 输出要求
+  - 最终输出一个**清晰的配置表格**（资产类别、目标比例、推荐工具类型）
+  - 用"核心-卫星"框架组织：核心仓位（70%）+卫星仓位（30%）
+  - 给出3个关键的风险提示
+  - 建议下一次检视/调整的时间节点
+
+parameters:
+  - name: financial_situation
+    type: text
+    description: 投资者财务状况（可投资资产规模、收入稳定性、负债情况等）
+    required: true
+  - name: investment_horizon
+    type: string
+    description: 投资期限（如 3年、5年、10年以上）
+    required: true
+  - name: max_drawdown_tolerance
+    type: string
+    description: 最大可承受回撤（如 -15%、-20%）
+    required: true
+  - name: investment_goal
+    type: text
+    description: 投资目标（如：退休储备、子女教育、资产增值）
+    required: false
+    default: "长期资产增值"
+  - name: life_stage
+    type: text
+    description: 当前年龄或人生阶段
+    required: false
+    default: "35-45岁，事业上升期"
+  - name: current_holdings
+    type: text
+    description: 现有持仓概要（可留空）
+    required: false
+    default: "无现有持仓，从零开始构建组合"

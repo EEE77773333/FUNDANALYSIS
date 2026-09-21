@@ -1,0 +1,14 @@
+{
+  "518880": {"name": "华安黄金ETF", "keywords": ["黄金ETF", "黄金etf", "Au9999"]},
+  "513100": {"name": "国泰纳斯达克100ETF", "keywords": ["纳指", "纳斯达克100", "Nasdaq100"]},
+  "513500": {"name": "博时标普500ETF", "keywords": ["标普500", "S&P500"]},
+  "510300": {"name": "华泰柏瑞沪深300ETF", "keywords": ["沪深300ETF", "沪深300etf", "HS300"]},
+  "510500": {"name": "南方中证500ETF", "keywords": ["中证500ETF", "中证500etf"]},
+  "159915": {"name": "易方达创业板ETF", "keywords": ["创业板ETF", "创业板指ETF"]},
+  "512880": {"name": "国泰中证全指证券公司ETF", "keywords": ["证券ETF", "券商ETF"]},
+  "512690": {"name": "鹏华中证酒ETF", "keywords": ["酒ETF", "白酒ETF"]},
+  "515790": {"name": "华泰柏瑞中证光伏产业ETF", "keywords": ["光伏ETF"]},
+  "512480": {"name": "国联安中证全指半导体ETF", "keywords": ["半导体ETF", "芯片ETF"]},
+  "513050": {"name": "易方达中证海外互联ETF", "keywords": ["中概互联", "海外互联"]},
+  "511990": {"name": "华宝添益", "keywords": ["货币ETF", "添益"]}
+}

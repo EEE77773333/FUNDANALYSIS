@@ -1,0 +1,72 @@
+# 东财板块/概念 → 基金可观察主题归并规则
+themes:
+  半导体/芯片链:
+    sectors: [半导体, 元件, 电子化学品, 光学光电子, 消费电子]
+    keywords: [半导体, 芯片, 集成电路, 存储, 光刻]
+    representatives:
+      - {code: "512480", name: "半导体ETF", kind: index}
+      - {code: "159995", name: "芯片ETF", kind: index}
+      - {code: "001630", name: "天弘中证电子A", kind: active}
+  人工智能/算力:
+    sectors: [计算机, 通信, 软件开发, 互联网服务]
+    keywords: [人工智能, AI, 算力, 大模型, 机器人]
+    representatives:
+      - {code: "159819", name: "人工智能ETF", kind: index}
+      - {code: "515070", name: "人工智能ETF易方达", kind: index}
+      - {code: "011613", name: "国泰中证全指通信设备A", kind: active}
+  新能源/电力设备:
+    sectors: [电力设备, 电池, 光伏设备, 风电设备, 电网设备]
+    keywords: [新能源, 锂电, 光伏, 储能, 风电]
+    representatives:
+      - {code: "516160", name: "新能源车ETF", kind: index}
+      - {code: "515790", name: "光伏ETF", kind: index}
+      - {code: "005827", name: "易方达蓝筹精选", kind: active}
+  医药健康:
+    sectors: [医药生物, 化学制药, 中药, 医疗器械, 医疗服务]
+    keywords: [医药, 创新药, 医疗, 生物]
+    representatives:
+      - {code: "512010", name: "医药ETF", kind: index}
+      - {code: "512170", name: "医疗ETF", kind: index}
+      - {code: "000831", name: "工银医疗保健", kind: active}
+  红利/高股息:
+    sectors: [银行, 公用事业, 煤炭, 石油石化, 交通运输]
+    keywords: [红利, 高股息, 央企]
+    representatives:
+      - {code: "510880", name: "红利ETF", kind: index}
+      - {code: "515180", name: "红利低波ETF", kind: index}
+      - {code: "100038", name: "富国沪深300红利", kind: active}
+  消费复苏:
+    sectors: [食品饮料, 家用电器, 商贸零售, 社会服务, 美容护理]
+    keywords: [消费, 白酒, 家电, 旅游]
+    representatives:
+      - {code: "159928", name: "消费ETF", kind: index}
+      - {code: "110022", name: "易方达消费行业", kind: active}
+      - {code: "161725", name: "招商中证白酒", kind: index}
+  军工/国防:
+    sectors: [国防军工, 航天航空, 船舶制造]
+    keywords: [军工, 国防, 航空]
+    representatives:
+      - {code: "512660", name: "军工ETF", kind: index}
+      - {code: "512710", name: "军工龙头ETF", kind: index}
+      - {code: "001696", name: "中银新动力", kind: active}
+  地产链:
+    sectors: [房地产, 建筑装饰, 建筑材料, 家居用品]
+    keywords: [地产, 建材, 家居]
+    representatives:
+      - {code: "512200", name: "房地产ETF", kind: index}
+      - {code: "159707", name: "地产ETF", kind: index}
+      - {code: "000048", name: "华夏沪深300地产", kind: active}
+  汽车产业链:
+    sectors: [汽车, 汽车零部件, 汽车服务]
+    keywords: [汽车, 新能源车, 智能驾驶]
+    representatives:
+      - {code: "516110", name: "汽车ETF", kind: index}
+      - {code: "515030", name: "新能源车ETF", kind: index}
+      - {code: "004854", name: "广发中证全指汽车", kind: active}
+  资源周期:
+    sectors: [有色金属, 钢铁, 基础化工, 采掘行业]
+    keywords: [有色, 黄金, 铜, 化工, 煤炭]
+    representatives:
+      - {code: "512400", name: "有色金属ETF", kind: index}
+      - {code: "518880", name: "黄金ETF", kind: index}
+      - {code: "161226", name: "国投瑞银白银期货", kind: active}

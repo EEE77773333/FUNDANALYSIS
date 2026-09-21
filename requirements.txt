@@ -1,0 +1,37 @@
+# 中国基金智能分析系统 — Python 依赖
+# 安装方式: pip install -r requirements.txt
+
+# 数据源
+akshare>=1.14.0          # 天天基金/东方财富数据封装（需 Node.js 环境）
+efinance>=0.5.0          # 个股K线数据（稳定，代理兼容性好）
+tushare>=1.4.0           # 基金持仓/宏观数据备选（需免费注册token）
+requests>=2.31.0         # HTTP 请求（天天基金直接API）
+
+# AI 分析
+openai>=1.50.0           # DeepSeek API 客户端（OpenAI 兼容格式）
+anthropic>=0.40.0        # Claude API 客户端（备用）
+
+# Web 框架
+streamlit>=1.44,<1.50   # 交互式金融看板（兼容 starlette 0.41）
+plotly>=5.20.0           # 交互式图表
+matplotlib>=3.8.0        # 基础绑图
+
+# 数据处理
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.12.0            # 统计计算（夏普比率等）
+
+# 配置与工具
+python-dotenv>=1.0.0     # .env 环境变量加载
+pyyaml>=6.0              # YAML 提示词文件解析
+pydantic>=2.6.0          # 数据验证
+seaborn>=0.13.0          # 统计可视化
+
+# API 服务
+fastapi>=0.110.0         # RESTful API 框架
+uvicorn>=0.29.0          # ASGI 服务器
+
+# 导出功能（可选）
+python-docx>=1.1.0       # Word (.docx) 导出
+openpyxl>=3.1.0          # Excel (.xlsx) 导出
+weasyprint>=60.0         # PDF (.pdf) 导出（需系统安装 Pango/Cairo）

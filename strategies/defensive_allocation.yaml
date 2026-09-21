@@ -1,0 +1,43 @@
+# 防御性配置策略
+# 用于市场下跌/高波动环境下的防御性基金组合
+
+name: defensive_allocation
+display_name: 防御性配置策略
+description: 市场下行期的防御性配置，以货币基金+短债+低波动混合基金构建安全组合
+category: asset_allocation
+
+instructions: |
+  ## 防御性配置策略规则
+
+  ### 1. 市场环境判断前提
+  - 本策略适用于市场阶段为 bear（熊市）或 high_volatility（高波动）
+  - 触发条件：沪深300 20日均线 < 60日均线，或波动率 > 25%
+
+  ### 2. 资产配置比例
+  - 货币基金：20%（流动性保证）
+  - 短债基金：40%（稳定收益 + 低回撤）
+  - 中长期纯债：20%（收益增强）
+  - 低波动混合基金（股票仓位 < 20%）：20%（微量权益敞口）
+
+  ### 3. 精选标准
+  - 货币基金：规模 > 100亿，7日年化收益同类前 1/2
+  - 短债基金：近1年最大回撤 < 0.5%，管理费 < 0.3%
+  - 中长期纯债：近3年 Sharpe > 1.5，最大回撤 < 2%
+  - 低波动混合：近3年年化波动 < 5%，股票仓位 < 20%
+
+  ### 4. 调仓规则
+  - 月度审视一次
+  - 任一资产偏离目标权重超过 5% 时触发再平衡
+  - 市场阶段恢复为 bull 时，逐步切换到进取型配置
+
+required_tools:
+  - get_fund_nav_history
+  - get_fund_manager_info
+  - get_macro_indicators
+  - get_index_valuation
+
+market_regimes:
+  - bear
+  - high_volatility
+
+default_priority: 10
