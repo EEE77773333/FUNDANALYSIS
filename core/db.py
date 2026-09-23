@@ -378,6 +378,34 @@ def _apply_schema_migrations(conn):
     except Exception:
         pass
 
+    # ---- 档位升级申请（托管版：用户在工作台/受限页一键申请，管理员在用户管理页处理） ----
+    exec_sql(f"""
+        CREATE TABLE IF NOT EXISTS tier_upgrade_requests (
+            id {AI},
+            user_id INT NOT NULL,
+            email TEXT DEFAULT '',
+            display_name TEXT DEFAULT '',
+            current_tier TEXT DEFAULT 'free',
+            requested_tier TEXT DEFAULT 'pro',
+            note TEXT DEFAULT '',
+            status TEXT DEFAULT 'pending',
+            created_at TEXT NOT NULL,
+            handled_at TEXT DEFAULT '',
+            handled_by TEXT DEFAULT ''
+        )
+    """)
+    for s in (
+        "CREATE INDEX IF NOT EXISTS idx_tier_req_user ON tier_upgrade_requests(user_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_tier_req_status ON tier_upgrade_requests(status, created_at)",
+    ):
+        try:
+            if DB_MODE == "postgresql":
+                exec_sql(s)
+            else:
+                conn.execute(s)
+        except Exception:
+            pass
+
     # ---- 个人工作台：收藏 / 偏好 / 最近访问 ----
     exec_sql(f"""
         CREATE TABLE IF NOT EXISTS user_favorites (

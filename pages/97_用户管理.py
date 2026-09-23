@@ -50,7 +50,7 @@ def main():
 
     repo = UserRepo()
 
-    tabs = st.tabs(["📋 用户列表", "➕ 创建用户", "📊 统计概览"])
+    tabs = st.tabs(["📋 用户列表", "📨 升级申请", "➕ 创建用户", "📊 统计概览"])
 
     # ============================================================
     # Tab 1: 用户列表
@@ -95,18 +95,18 @@ def main():
                         )
 
                     with c2:
-                        # 套餐快速切换
+                        # 套餐快速切换（set_tier 不传 limit 时自动按 QUOTA_MAP 同步配额）
                         current_tier = u.get("tier", "free")
-                        limits = {"free": 10, "pro": 100, "enterprise": 99999}
+                        tier_opts = ["free", "plus", "pro", "enterprise"]
                         new_tier = st.selectbox(
                             "套餐",
-                            ["free", "pro", "enterprise"],
-                            index=["free", "pro", "enterprise"].index(current_tier),
+                            tier_opts,
+                            index=tier_opts.index(current_tier) if current_tier in tier_opts else 0,
                             key=f"tier_{u['id']}",
                             label_visibility="collapsed",
                         )
                         if new_tier != current_tier:
-                            repo.set_tier(u["id"], new_tier, limits[new_tier])
+                            repo.set_tier(u["id"], new_tier)
                             st.rerun()
 
                     with c3:
@@ -172,9 +172,93 @@ def main():
                 st.divider()
 
     # ============================================================
-    # Tab 2: 创建用户
+    # Tab 2: 升级申请（用户一键提交 → 管理员在此开通）
     # ============================================================
     with tabs[1]:
+        from core.tier_requests import list_requests, pending_count, resolve_request
+
+        section_header("档位升级申请", "用户在工作台 / 受限页提交，开通后立即生效")
+
+        try:
+            all_reqs = list_requests(limit=200)
+        except Exception as e:
+            st.error(f"读取升级申请失败：{str(e)[:120]}")
+            all_reqs = []
+
+        pending = [r for r in all_reqs if r.get("status") == "pending"]
+        approved = [r for r in all_reqs if r.get("status") == "approved"]
+        rejected = [r for r in all_reqs if r.get("status") == "rejected"]
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("待处理", pending_count())
+        m2.metric("已批准", len(approved))
+        m3.metric("已驳回", len(rejected))
+        st.divider()
+
+        if not pending:
+            st.info("暂无待处理的升级申请")
+        for r in pending:
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([3, 2, 2])
+                with c1:
+                    st.markdown(
+                        f"**{r.get('display_name') or '未设置'}** · {r.get('email', '')}"
+                    )
+                    st.caption(
+                        f"{TIER_LABELS.get(r.get('current_tier', 'free'), r.get('current_tier'))}"
+                        f" → 申请 **{TIER_LABELS.get(r.get('requested_tier', 'pro'), r.get('requested_tier'))}**"
+                        f" · 提交于 {str(r.get('created_at', ''))[:16]}"
+                    )
+                    if r.get("note"):
+                        st.caption(f"💬 {r.get('note')}")
+                with c2:
+                    tier_opts = ["free", "plus", "pro", "enterprise"]
+                    grant_tier = st.selectbox(
+                        "开通档位",
+                        tier_opts,
+                        index=tier_opts.index(r.get("requested_tier", "pro"))
+                        if r.get("requested_tier") in tier_opts else 2,
+                        key=f"grant_tier_{r['id']}",
+                        format_func=lambda t: TIER_LABELS.get(t, t),
+                        label_visibility="collapsed",
+                    )
+                with c3:
+                    b1, b2 = st.columns(2)
+                    admin_email = (st.session_state.get("user") or {}).get("email", "")
+                    with b1:
+                        if st.button("✅ 开通", key=f"grant_{r['id']}",
+                                     type="primary", use_container_width=True):
+                            repo.set_tier(r["user_id"], grant_tier)
+                            resolve_request(r["id"], "approved", admin_email)
+                            st.toast(f"已为 {r.get('email')} 开通 {TIER_LABELS.get(grant_tier, grant_tier)}",
+                                     icon="✅")
+                            st.rerun()
+                    with b2:
+                        if st.button("🚫 驳回", key=f"reject_{r['id']}",
+                                     use_container_width=True):
+                            resolve_request(r["id"], "rejected", admin_email)
+                            st.toast("申请已驳回", icon="🚫")
+                            st.rerun()
+
+        if approved or rejected:
+            with st.expander(f"处理记录（{len(approved) + len(rejected)} 条）", expanded=False):
+                rows = []
+                for r in approved + rejected:
+                    rows.append({
+                        "邮箱": r.get("email", ""),
+                        "当前档位": r.get("current_tier", ""),
+                        "申请档位": r.get("requested_tier", ""),
+                        "状态": "✅ 已批准" if r.get("status") == "approved" else "🚫 已驳回",
+                        "处理人": r.get("handled_by", ""),
+                        "提交时间": str(r.get("created_at", ""))[:16],
+                        "处理时间": str(r.get("handled_at", ""))[:16],
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    # ============================================================
+    # Tab 3: 创建用户
+    # ============================================================
+    with tabs[2]:
         section_header("创建新用户")
 
         with st.form("admin_create_user_form"):
@@ -185,13 +269,13 @@ def main():
             with c2:
                 password = st.text_input("初始密码 *", type="password",
                                          help="用户首次登录后应尽快修改")
-                tier = st.selectbox("套餐", ["free", "pro", "enterprise"], index=1,
+                tier = st.selectbox("套餐", ["free", "plus", "pro", "enterprise"], index=2,
                                     format_func=lambda t: TIER_LABELS.get(t, t))
 
             api_limit = st.slider(
                 "每日 API 配额",
                 5, 99999,
-                {"free": 10, "pro": 100, "enterprise": 99999}.get(tier, 100),
+                QUOTA_MAP.get(tier, {}).get("ai_analysis", 100),
                 step=5,
                 help="AI 分析每日最大调用次数"
             )
@@ -222,14 +306,14 @@ def main():
                         st.error(str(e))
 
     # ============================================================
-    # Tab 3: 统计概览
+    # Tab 4: 统计概览
     # ============================================================
-    with tabs[2]:
+    with tabs[3]:
         all_users = repo.list_all()
         section_header("用户统计")
 
         # 饼图：套餐分布
-        tier_counts = {"free": 0, "pro": 0, "enterprise": 0}
+        tier_counts = {"free": 0, "plus": 0, "pro": 0, "enterprise": 0}
         for u in all_users:
             t = u.get("tier", "free")
             tier_counts[t] = tier_counts.get(t, 0) + 1
@@ -238,10 +322,11 @@ def main():
         with c1:
             import plotly.graph_objects as go
             fig = go.Figure(data=[go.Pie(
-                labels=["Free", "Pro", "Enterprise"],
-                values=[tier_counts["free"], tier_counts["pro"], tier_counts["enterprise"]],
+                labels=["Free", "Plus", "Pro", "Enterprise"],
+                values=[tier_counts["free"], tier_counts["plus"],
+                        tier_counts["pro"], tier_counts["enterprise"]],
                 hole=0.4,
-                marker=dict(colors=["#9CA3AF", "#3B82F6", "#7C3AED"]),
+                marker=dict(colors=["#9CA3AF", "#34D399", "#3B82F6", "#7C3AED"]),
             )])
             fig.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10))
             st.plotly_chart(fig, use_container_width=True)

@@ -367,6 +367,14 @@ def render_workbench_home() -> bool:
         )
         st.page_link("pages/21_预警规则.py", label="打开预警历史", icon="🔔")
 
+    # 托管版：非企业档用户展示「申请升级」入口（提交后通知管理员后台开通）
+    try:
+        from .middleware import is_cloud_edition, render_upgrade_request_section
+        if is_cloud_edition():
+            render_upgrade_request_section(default_tier="pro", context="workbench")
+    except Exception:
+        pass
+
     _render_workbench_live_panels()
 
     section_header("快捷入口")

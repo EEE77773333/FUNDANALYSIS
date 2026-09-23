@@ -47,14 +47,19 @@ class UserRepo:
         return "%s" if DB_MODE == "postgresql" else "?"
 
     def create(self, email: str, password_hash: str, display_name: str = "") -> int:
-        """创建用户，返回 user_id（默认 free 套餐，配额与 QUOTA_MAP 保持一致）"""
+        """创建用户，返回 user_id。
+
+        页面自助注册的新用户一律默认 free 档（tier 显式写入，不依赖列默认值；
+        配额与 QUOTA_MAP["free"] 保持一致）。管理员建号用 admin_create_user()，
+        它会先走本方法再用 set_tier 覆盖档位。
+        """
         from .middleware import QUOTA_MAP
         free_limit = QUOTA_MAP["free"]["ai_analysis"]
         ph = self._ph()
         with get_connection() as conn:
             result = conn.execute(
-                f"INSERT INTO users (email, password_hash, display_name, api_calls_limit, created_at, updated_at) "
-                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})",
+                f"INSERT INTO users (email, password_hash, display_name, tier, api_calls_limit, created_at, updated_at) "
+                f"VALUES ({ph}, {ph}, {ph}, 'free', {ph}, {ph}, {ph})",
                 (email, password_hash, display_name, free_limit, now_iso(), now_iso()),
             )
             # PG: RETURNING id 需要额外查询

@@ -171,7 +171,12 @@ def show_login_page():
                     try:
                         uid = AuthManager.register(email, password, display_name)
                         if uid:
-                            st.success("✅ 注册成功！请切换到「登录」标签页登录")
+                            free_n = QUOTA_MAP["free"]["ai_analysis"]
+                            st.success(
+                                f"✅ 注册成功！已为你创建**免费版**账户（每日 {free_n} 次 AI 分析）。"
+                                "请切换到「登录」标签页登录；"
+                                "登录后可在工作台申请升级更高档位。"
+                            )
                         else:
                             st.error("该邮箱已被注册")
                     except ValueError as e:
@@ -300,6 +305,104 @@ def get_remaining_quota(user: dict, resource: str) -> int:
     return max(0, limit - _quota_used(user, resource))
 
 
+def render_upgrade_request_section(default_tier: str = "pro", context: str = "page") -> None:
+    """
+    升级申请入口（托管版专用）：低档位用户一键提交，管理员收到通知后在后台开通。
+
+    在「工作台」、受限页订阅引导（paywall）、配额用尽提示三处复用。
+    - 管理员（enterprise）与社区版不渲染；
+    - 已有待处理申请时显示等待提示，不重复提交；
+    - 提交动作：落库（tier_upgrade_requests）+ 异步推送管理员通知通道。
+    """
+    if not is_cloud_edition():
+        return
+    user = st.session_state.get("user") or {}
+    if not user or is_admin():
+        return
+
+    tier = current_user_tier()
+    if tier == "enterprise":
+        return
+
+    try:
+        from core.tier_requests import (
+            create_request,
+            has_pending,
+            notify_admins_async,
+        )
+    except Exception:
+        return
+
+    key_ns = f"upreq_{context}"
+
+    # 上一次 rerun 中刚提交成功 → 显示确认
+    if st.session_state.pop(f"_{key_ns}_done", False):
+        st.success("✅ 升级申请已提交，管理员已收到通知，开通后会自动生效（无需重新登录）。")
+
+    try:
+        pending = has_pending(int(user.get("id") or 0))
+    except Exception:
+        pending = False
+    if pending:
+        st.info(
+            "📨 你已提交过升级申请，管理员会尽快处理；"
+            "开通后左侧菜单的 🔒 会自动解除。"
+        )
+        return
+
+    order = ["free", "plus", "pro", "enterprise"]
+    try:
+        choices = [t for t in order if order.index(t) > order.index(tier)]
+    except ValueError:
+        choices = ["pro"]
+    if not choices:
+        return
+    # 默认选中：优先页面所需档位，其次第二档
+    idx = choices.index(default_tier) if default_tier in choices else min(1, len(choices) - 1)
+    with st.expander("⬆️ 申请升级档位", expanded=False):
+        st.caption("点击提交后管理员会立即收到通知，后台为你开通对应档位。")
+        target = st.selectbox(
+            "目标档位",
+            choices,
+            index=idx,
+            format_func=lambda t: f"{TIER_LABELS.get(t, t)}（{TIER_PRICING.get(t, '—')}）",
+            key=f"{key_ns}_tier",
+        )
+        note = st.text_input(
+            "留言（可选）",
+            placeholder="例如：主要想用监控预警功能",
+            key=f"{key_ns}_note",
+        )
+        if st.button(
+            "📨 提交升级申请",
+            type="primary",
+            use_container_width=True,
+            key=f"{key_ns}_btn",
+        ):
+            res = create_request(user, target, note)
+            if res.get("ok"):
+                _t = _valid_tier_quiet(target)
+                notify_admins_async(
+                    "📩 收到档位升级申请",
+                    (
+                        f"用户：{user.get('display_name') or '—'}（{user.get('email')}）\n"
+                        f"当前档位：{TIER_LABELS.get(tier, tier)}\n"
+                        f"申请档位：{TIER_LABELS.get(_t, _t)}\n"
+                        f"留言：{note or '（无）'}\n\n"
+                        f"请到「用户管理 → 升级申请」处理。"
+                    ),
+                )
+                st.session_state[f"_{key_ns}_done"] = True
+                st.rerun()
+            else:
+                st.error(f"提交失败：{res.get('reason') or '未知错误'}")
+
+
+def _valid_tier_quiet(tier: str) -> str:
+    t = (tier or "").strip().lower()
+    return t if t in ("free", "plus", "pro", "enterprise") else "pro"
+
+
 def render_quota_exhausted_notice(feature_label: str = "AI 分析") -> None:
     """超额时的统一提示 + 升级引导。"""
     st.error(f"今日 **{feature_label}** 次数已用完")
@@ -323,6 +426,11 @@ def render_quota_exhausted_notice(feature_label: str = "AI 分析") -> None:
                 st.caption(f"· {benefit}")
     with cols[1]:
         st.caption("明日 0 点（北京时间）自动重置")
+
+    # 一键申请升级（免费/低档用户 → 通知管理员后台开通）
+    render_upgrade_request_section(
+        default_tier=next_tier or "pro", context="quota"
+    )
 
 
 def require_ai_quota(feature_label: str = "AI 分析") -> bool:
@@ -517,11 +625,14 @@ def render_subscription_required(required_tier: str, page_or_group: Optional[str
         st.success(f"**开通 / 升级方式**：{SUBSCRIBE_CONTACT}")
     else:
         st.info(
-            "**开通 / 升级方式**：请通过页面右下角的联系方式与管理员取得联系，"
-            "说明需要开通的套餐档位（专业版 / 企业版）。\n\n"
-            "_（运营方可设置环境变量 `SUBSCRIBE_CONTACT` 自定义此处文案，"
-            "例如微信号或开通链接。）_"
+            "**开通 / 升级方式**：点击下方按钮一键提交申请，管理员会收到通知并为你开通。"
         )
+
+    # 一键申请升级（落库 + 通知管理员），目标档位默认为该页所需档位
+    render_upgrade_request_section(
+        default_tier=required_tier if required_tier != "free" else "pro",
+        context=f"paywall_{section or required_tier}",
+    )
 
     st.caption(
         "提示：菜单会一直保留在左侧，订阅开通后无需重新登录即可直接进入。"
